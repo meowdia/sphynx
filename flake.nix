@@ -41,25 +41,26 @@
           }
         );
 
+        cargoArtifactsDev = cargoArtifacts.overrideAttrs (final: prev: {
+          CARGO_PROFILE = "dev";
+        });
+
         sphynxClippy = craneLib.cargoClippy (
           commonArgs
           // {
-            inherit cargoArtifacts;
+            CARGO_PROFILE = "dev";
+            cargoArtifacts = cargoArtifactsDev;
             cargoClippyExtraArgs = "--all-targets -- --deny warnings";
           }
         );
 
-        sphynxFmt = craneLib.cargoFmt (
-          commonArgs
-          // {
-            inherit cargoArtifacts;
-          }
-        );
+        sphynxFmt = craneLib.cargoFmt commonArgs;
 
         sphynxTest = craneLib.cargoTest (
           commonArgs
           // {
-            inherit cargoArtifacts;
+            CARGO_PROFILE = "dev";
+            cargoArtifacts = cargoArtifactsDev;
           }
         );
 
@@ -73,7 +74,6 @@
       {
         checks = {
           clippy = sphynxClippy;
-          build = sphynx;
           test = sphynxTest;
           fmt = sphynxFmt;
         };
@@ -105,6 +105,15 @@
               "fmt"
             ]
         );
+
+        packages = {
+          ci_clippy = sphynxClippy;
+          ci_test = sphynxTest;
+          ci_fmt = sphynxFmt;
+          deps = cargoArtifacts;
+          deps_dev = cargoArtifactsDev;
+          lib = sphynx;
+        };
 
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
