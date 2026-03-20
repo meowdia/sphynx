@@ -1,5 +1,6 @@
 /// An unparsed SDP line, with only its type
 /// [RFC8866-5](https://datatracker.ietf.org/doc/html/rfc8866#section-5)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RawLine<'a> {
     /// ASCII character for line type: b'm', b'c', b'a', etc.
     pub kind: u8,
@@ -7,6 +8,7 @@ pub struct RawLine<'a> {
 }
 
 /// [RFC8866-5.14](https://datatracker.ietf.org/doc/html/rfc8866#section-5.14)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RawMediaDescription<'a> {
     /// the m line for this media section
     pub description: RawLine<'a>,
@@ -17,6 +19,7 @@ pub struct RawMediaDescription<'a> {
 /// > media description (or the end of the whole description, whichever comes first).
 ///
 /// [RFC8866-5](https://datatracker.ietf.org/doc/html/rfc8866#section-5)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RawSession<'a> {
     pub session: Vec<RawLine<'a>>,
     pub media_sections: Vec<RawMediaDescription<'a>>,
