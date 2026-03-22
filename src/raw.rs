@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Meowdia Community
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 /// An unparsed SDP line, with only its type
 /// [RFC8866-5](https://datatracker.ietf.org/doc/html/rfc8866#section-5)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

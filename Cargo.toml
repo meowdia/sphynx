@@ -1,7 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Meowdia Community
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
 [package]
 name = "sphynx"
 version = "0.1.0"
 edition = "2024"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 thiserror = "2.0.18"
