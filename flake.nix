@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Meowdia Community
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
 {
   description = "A very basic flake";
 
@@ -119,6 +122,7 @@
           packages = with pkgs; [
             pkgs.fenix.stable.toolchain
             just
+            reuse
           ];
         };
       }

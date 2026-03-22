@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Meowdia Community
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use thiserror::Error;
 
 /// Severity assigned to a collected SDP diagnostic.

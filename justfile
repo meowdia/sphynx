@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Meowdia Community
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
 _default:
     just --list
 
@@ -11,7 +14,10 @@ lint:
     cargo clippy
     cargo fmt --check
 
-check: lint build test
+reuse:
+    reuse lint
+
+check: lint build test reuse
 
 clean:
     cargo clean
