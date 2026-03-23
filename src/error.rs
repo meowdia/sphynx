@@ -1,27 +1,25 @@
 // SPDX-FileCopyrightText: 2026 Meowdia Community
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::num::NonZeroUsize;
+
 use thiserror::Error;
 
-/// Severity assigned to a collected SDP diagnostic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum DiagnosticLevel {
-    /// The input is usable, but it is suspicious or non-canonical.
-    Warning,
-    /// The input is malformed, but recovery may still be possible.
-    Error,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum HandlingMode {
+pub enum HandlingMode {
+    /// Fully RFC-compliant parsing mode, rejects all errors
     Strict,
+    /// RFC-compliant parsing mode, may skip a malformed media section and restart
+    /// on the following one
     Recover(HandlingOptions),
+    /// Best-effort parsing mode, accepts malformed input and may
+    /// skip media sections in the same fashion as [HandlingMode::Recover]
     BestEffort(HandlingOptions),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct HandlingOptions {
-    pub max_diagnostics: usize,
+pub struct HandlingOptions {
+    pub max_diagnostics: Option<NonZeroUsize>,
 }
 
 /// Configuration for SDP processing behavior and diagnostic collection.
@@ -46,7 +44,7 @@ impl SdpOptions {
 
     /// Construct options that recover when a safe synchronization point
     /// is available and stop after collecting `max_diagnostics`.
-    pub const fn recover(max_diagnostics: usize) -> Self {
+    pub fn recover(max_diagnostics: Option<NonZeroUsize>) -> Self {
         Self {
             mode: HandlingMode::Recover(HandlingOptions { max_diagnostics }),
         }
@@ -54,7 +52,7 @@ impl SdpOptions {
 
     /// Construct options that prefer producing output even from heavily
     /// malformed input and stop after collecting `max_diagnostics`.
-    pub const fn best_effort(max_diagnostics: usize) -> Self {
+    pub fn best_effort(max_diagnostics: Option<NonZeroUsize>) -> Self {
         Self {
             mode: HandlingMode::BestEffort(HandlingOptions { max_diagnostics }),
         }
@@ -122,6 +120,12 @@ pub enum SdpIssueKind<'a> {
     /// A raw line was malformed.
     #[error("malformed SDP line")]
     MalformedLine { line: &'a str },
+    /// A raw line was empty
+    #[error("empty SDP line")]
+    EmptyLine,
+    /// 1 or more trailing spaces after the type of the SDP line
+    #[error("{count} trailing spaces in sdp line")]
+    TrailingSpaceInType { count: usize },
     /// A raw media description line was malformed.
     #[error("malformed SDP media description")]
     MalformedMediaDescription { value: &'a str },
@@ -178,6 +182,8 @@ impl<'a> SdpIssueKind<'a> {
             Self::UnknownLineType { .. } => "unknown_line_type",
             Self::MissingRequiredField { .. } => "missing_required_field",
             Self::MalformedLine { .. } => "malformed_line",
+            Self::EmptyLine { .. } => "empty_line",
+            Self::TrailingSpaceInType { .. } => "trailing_space_in_type",
             Self::MalformedMediaDescription { .. } => "malformed_media_description",
             Self::MalformedMediaSection => "malformed_media_section",
             Self::SkippedMediaSection => "skipped_media_section",
@@ -206,12 +212,73 @@ impl<'a> SdpIssue<'a> {
     }
 }
 
-/// A recoverable diagnostic collected while processing SDP.
-#[non_exhaustive]
+/// A non-fatal issue encountered while parsing SDP
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Diagnostic<'a> {
-    pub level: DiagnosticLevel,
-    pub issue: SdpIssue<'a>,
+pub enum Diagnostic<'a> {
+    /// The input is usable, but it is suspicious or non-canonical.
+    Warning(SdpIssue<'a>),
+    /// The input is malformed, but recovery may still be possible.
+    Error(SdpIssue<'a>),
+}
+
+impl<'a> Diagnostic<'a> {
+    pub fn issue(&self) -> &SdpIssue<'a> {
+        match self {
+            Diagnostic::Warning(sdp_issue) | Diagnostic::Error(sdp_issue) => sdp_issue,
+        }
+    }
+
+    pub fn is_warning(&self) -> bool {
+        matches!(self, Diagnostic::Warning { .. })
+    }
+
+    pub fn is_error(&self) -> bool {
+        matches!(self, Diagnostic::Error { .. })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Collector<'a> {
+    pub(crate) items: Vec<Diagnostic<'a>>,
+    pub(crate) mode: HandlingMode,
+}
+
+impl<'a> Collector<'a> {
+    pub fn items(&self) -> &[Diagnostic<'a>] {
+        &self.items
+    }
+
+    pub fn new(mode: HandlingMode) -> Self {
+        Self {
+            items: Vec::new(),
+            mode,
+        }
+    }
+
+    /// Pushes a new [Diagnostic] to this Collector, returns a `Result::Err` if
+    /// the limit of diagnostics was reached
+    pub fn push_diagnostic(&mut self, diagnostic: Diagnostic<'a>) -> Result<(), SdpIssue<'a>> {
+        match self.mode {
+            HandlingMode::BestEffort(opt) | HandlingMode::Recover(opt) => {
+                self.items.push(diagnostic);
+                if let Some(md) = opt.max_diagnostics
+                    && self.items.len() >= md.into()
+                {
+                    return Err(SdpIssue {
+                        kind: SdpIssueKind::DiagnosticLimitExceeded {
+                            max_diagnostics: md.into(),
+                        },
+                        location: None,
+                    });
+                }
+                Ok(())
+            }
+            HandlingMode::Strict => {
+                self.items.push(diagnostic);
+                Ok(())
+            }
+        }
+    }
 }
 
 /// Collection of recoverable diagnostics emitted during SDP processing.
