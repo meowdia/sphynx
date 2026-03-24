@@ -154,6 +154,8 @@ fn check() -> Result<(), String> {
         return Ok(());
     }
 
+    print_generated_diff(&generated_path, &expected);
+
     Err(format!(
         "generated IANA enums are outdated, run `{GENERATE_COMMAND}`"
     ))
@@ -547,6 +549,42 @@ fn write_if_changed(path: &Path, contents: &str) -> Result<bool, String> {
             Ok(true)
         }
     }
+}
+
+fn print_generated_diff(path: &Path, expected: &str) {
+    let expected_path =
+        env::temp_dir().join(format!("sphynx-iana-expected-{}.rs", std::process::id()));
+
+    if let Err(error) = fs::write(&expected_path, expected) {
+        eprintln!(
+            "failed to write temporary diff input `{}`: {error}",
+            expected_path.display()
+        );
+        return;
+    }
+
+    let output = Command::new("git")
+        .args(["diff", "--no-index", "--no-ext-diff", "--"])
+        .arg(path)
+        .arg(&expected_path)
+        .output();
+
+    match output {
+        Ok(output) => {
+            if !output.stdout.is_empty() {
+                eprint!("{}", String::from_utf8_lossy(&output.stdout));
+            }
+
+            if !output.stderr.is_empty() {
+                eprint!("{}", String::from_utf8_lossy(&output.stderr));
+            }
+        }
+        Err(error) => {
+            eprintln!("failed to run `git diff --no-index`: {error}");
+        }
+    }
+
+    let _ = fs::remove_file(expected_path);
 }
 
 fn format_rust_source(source: &str) -> Result<String, String> {
