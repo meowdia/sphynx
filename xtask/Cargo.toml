@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Meowdia Community
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+roxmltree = "0.21.1"
+syn = "2.0.117"
+ureq = { version = "3.3.0", default-features = false, features = ["rustls", "rustls-webpki-roots"] }
+
+[lints]
+workspace = true
