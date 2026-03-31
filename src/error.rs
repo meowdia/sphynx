@@ -169,7 +169,7 @@ pub enum SdpIssueKind<'a> {
 
 impl<'a> SdpIssueKind<'a> {
     /// Stable machine-readable code for this SDP issue kind.
-    pub fn code(&self) -> &'static str {
+    pub const fn code(&self) -> &'static str {
         match self {
             Self::UnknownAttribute { .. } => "unknown_attribute",
             Self::NonCanonicalLineEnding => "non_canonical_line_ending",
@@ -201,7 +201,7 @@ pub struct SdpIssue<'a> {
 }
 
 impl<'a> SdpIssue<'a> {
-    pub fn code(&self) -> &'static str {
+    pub const fn code(&self) -> &'static str {
         self.kind.code()
     }
 }
@@ -233,7 +233,7 @@ pub struct SdpFailure<'a> {
 }
 
 impl<'a> SdpFailure<'a> {
-    pub fn code(&self) -> &'static str {
+    pub const fn code(&self) -> &'static str {
         self.issue.code()
     }
 }
