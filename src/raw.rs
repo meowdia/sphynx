@@ -103,11 +103,11 @@ impl<'a> RawSession<'a> {
             is_skipping_media: false,
         };
 
-        for (i, line) in sdp.split_terminator("\n").enumerate() {
-            let (line, is_crlf) = if let Some(stripped) = line.strip_suffix("\r") {
+        for (i, line) in sdp.split_inclusive("\n").enumerate() {
+            let (line, is_crlf) = if let Some(stripped) = line.strip_suffix("\r\n") {
                 (stripped, true)
             } else {
-                (line, false)
+                (&line[..(line.len() - 1)], false)
             };
 
             if !is_crlf {
