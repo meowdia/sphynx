@@ -99,9 +99,10 @@ pub enum SdpIssueKind<'a> {
     /// [section 5.13](https://datatracker.ietf.org/doc/html/rfc8866#section-5.13).
     #[error("unknown SDP attribute `{name}`")]
     UnknownAttribute { name: &'a str },
-    /// A line ending was accepted even though it was not RFC-canonical `CRLF`.
-    #[error("non-canonical SDP line ending")]
-    NonCanonicalLineEnding,
+    /// The line ending sequence was changed while parsing the document, i.e.:
+    /// `LF` -> `CRLF` or `CRLF` -> `LF`
+    #[error("SDP EOL sequence changed in the middle of parsing")]
+    MixedLineEndings,
     /// An attribute was repeated.
     #[error("duplicate SDP attribute `{name}`")]
     DuplicateAttribute { name: &'a str },
@@ -176,7 +177,7 @@ impl<'a> SdpIssueKind<'a> {
     pub const fn code(&self) -> &'static str {
         match self {
             Self::UnknownAttribute { .. } => "unknown_attribute",
-            Self::NonCanonicalLineEnding => "non_canonical_line_ending",
+            Self::MixedLineEndings => "mixed_line_ending",
             Self::DuplicateAttribute { .. } => "duplicate_attribute",
             Self::InvalidAttributeValue { .. } => "invalid_attribute_value",
             Self::UnknownLineType { .. } => "unknown_line_type",

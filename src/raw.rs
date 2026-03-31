@@ -103,18 +103,22 @@ impl<'a> RawSession<'a> {
             is_skipping_media: false,
         };
 
+        let mut expect_crlf: Option<bool> = None;
+
         for (i, line) in sdp.split_inclusive("\n").enumerate() {
             let (line, is_crlf) = if let Some(stripped) = line.strip_suffix("\r\n") {
                 (stripped, true)
             } else {
-                (&line[..(line.len() - 1)], false)
+                (line.strip_suffix('\n').unwrap_or(line), false)
             };
 
-            if !is_crlf {
+            let eol_mismatch = expect_crlf.replace(is_crlf).unwrap_or(is_crlf) != is_crlf;
+
+            if eol_mismatch {
                 match collector.mode {
                     HandlingMode::Strict => {
                         return Err(SdpIssue {
-                            kind: SdpIssueKind::NonCanonicalLineEnding,
+                            kind: SdpIssueKind::MixedLineEndings,
                             location: Some(SdpLocation::InputLine {
                                 line_number: i as u32,
                             }),
@@ -122,7 +126,7 @@ impl<'a> RawSession<'a> {
                     }
                     HandlingMode::BestEffort(_) | HandlingMode::Recover(_) => {
                         collector.push_diagnostic(Diagnostic::Warning(SdpIssue {
-                            kind: SdpIssueKind::NonCanonicalLineEnding,
+                            kind: SdpIssueKind::MixedLineEndings,
                             location: Some(SdpLocation::InputLine {
                                 line_number: i as u32,
                             }),
@@ -200,7 +204,7 @@ impl<'a> RawSessionParser<'a> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        error::{Collector, HandlingMode, HandlingOptions, SdpIssue, SdpIssueKind},
+        error::{Collector, HandlingMode, HandlingOptions, SdpIssue, SdpIssueKind, SdpLocation},
         raw::{RawLine, RawSession},
     };
 
@@ -226,17 +230,40 @@ mod tests {
         const SDP: &str = "v=0\ns=Test SDP\ni=SDP Offer\n";
 
         let mut collector = Collector::new(HandlingMode::Strict);
+        let sess = RawSession::parse_document(SDP, &mut collector).unwrap();
+
         assert_eq!(
-            RawSession::parse_document(SDP, &mut collector)
-                .unwrap_err()
-                .kind,
-            SdpIssueKind::NonCanonicalLineEnding
+            sess.session[0],
+            RawLine::parse("v=0", 0, &mut collector).unwrap()
+        );
+        assert_eq!(
+            sess.session[1],
+            RawLine::parse("s=Test SDP", 1, &mut collector).unwrap()
+        );
+        assert_eq!(
+            sess.session[2],
+            RawLine::parse("i=SDP Offer", 2, &mut collector).unwrap()
         );
     }
 
     #[test]
-    fn lenient_lf() {
-        const SDP: &str = "v=0\ns=Test SDP\ni=SDP Offer\n";
+    fn strict_eol() {
+        const SDP: &str = "v=0\r\ns=Test SDP\ni=SDP Offer\r\n";
+
+        let mut collector = Collector::new(HandlingMode::Strict);
+
+        assert_eq!(
+            RawSession::parse_document(SDP, &mut collector).unwrap_err(),
+            SdpIssue {
+                kind: SdpIssueKind::MixedLineEndings,
+                location: Some(SdpLocation::InputLine { line_number: 1 })
+            }
+        );
+    }
+
+    #[test]
+    fn lenient_eol() {
+        const SDP: &str = "v=0\r\ns=Test SDP\ni=SDP Offer\r\n";
 
         let mut collector = Collector::new(HandlingMode::BestEffort(HandlingOptions {
             max_diagnostics: None,
@@ -245,15 +272,21 @@ mod tests {
             panic!("Failed to parse session: {:?}", collector.items);
         };
 
-        for (i, issue) in collector.items.iter().map(|i| i.issue()).enumerate() {
-            assert_eq!(issue.kind, SdpIssueKind::NonCanonicalLineEnding);
-            assert_eq!(
-                issue.location,
-                Some(crate::error::SdpLocation::InputLine {
-                    line_number: i as u32
-                })
-            );
-        }
+        assert!(collector.items.iter().all(|i| i.is_warning()));
+        assert_eq!(
+            collector.items[0].issue(),
+            &SdpIssue {
+                kind: SdpIssueKind::MixedLineEndings,
+                location: Some(SdpLocation::InputLine { line_number: 1 })
+            }
+        );
+        assert_eq!(
+            collector.items[1].issue(),
+            &SdpIssue {
+                kind: SdpIssueKind::MixedLineEndings,
+                location: Some(SdpLocation::InputLine { line_number: 2 })
+            }
+        );
 
         assert_eq!(
             sess.session[0],
@@ -285,7 +318,7 @@ mod tests {
                     kind: SdpIssueKind::MalformedLine {
                         line: "invalid_line"
                     },
-                    location: Some(crate::error::SdpLocation::InputLine { line_number: 3 })
+                    location: Some(SdpLocation::InputLine { line_number: 3 })
                 }
             );
             assert!(collector.items[1].is_warning());
@@ -293,7 +326,7 @@ mod tests {
                 collector.items[1].issue(),
                 &SdpIssue {
                     kind: SdpIssueKind::SkippedMediaSection,
-                    location: Some(crate::error::SdpLocation::MediaSection {
+                    location: Some(SdpLocation::MediaSection {
                         index: 0,
                         line_number: Some(3)
                     })
