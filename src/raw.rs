@@ -106,11 +106,10 @@ impl<'a> RawSession<'a> {
         let mut expect_crlf: Option<bool> = None;
 
         for (i, line) in sdp.split_inclusive("\n").enumerate() {
-            let (line, is_crlf) = if let Some(stripped) = line.strip_suffix("\r\n") {
-                (stripped, true)
-            } else {
-                (line.strip_suffix('\n').unwrap_or(line), false)
-            };
+            let (line, is_crlf) = line.strip_suffix("\r\n").map_or_else(
+                || (line.strip_suffix('\n').unwrap_or(line), false),
+                |stripped| (stripped, true),
+            );
 
             let eol_mismatch = expect_crlf.replace(is_crlf).unwrap_or(is_crlf) != is_crlf;
 

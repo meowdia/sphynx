@@ -44,7 +44,7 @@ impl SdpOptions {
 
     /// Construct options that recover when a safe synchronization point
     /// is available and stop after collecting `max_diagnostics`.
-    pub fn recover(max_diagnostics: Option<NonZeroUsize>) -> Self {
+    pub const fn recover(max_diagnostics: Option<NonZeroUsize>) -> Self {
         Self {
             mode: HandlingMode::Recover(HandlingOptions { max_diagnostics }),
         }
@@ -52,7 +52,7 @@ impl SdpOptions {
 
     /// Construct options that prefer producing output even from heavily
     /// malformed input and stop after collecting `max_diagnostics`.
-    pub fn best_effort(max_diagnostics: Option<NonZeroUsize>) -> Self {
+    pub const fn best_effort(max_diagnostics: Option<NonZeroUsize>) -> Self {
         Self {
             mode: HandlingMode::BestEffort(HandlingOptions { max_diagnostics }),
         }
@@ -223,17 +223,17 @@ pub enum Diagnostic<'a> {
 }
 
 impl<'a> Diagnostic<'a> {
-    pub fn issue(&self) -> &SdpIssue<'a> {
+    pub const fn issue(&self) -> &SdpIssue<'a> {
         match self {
             Diagnostic::Warning(sdp_issue) | Diagnostic::Error(sdp_issue) => sdp_issue,
         }
     }
 
-    pub fn is_warning(&self) -> bool {
+    pub const fn is_warning(&self) -> bool {
         matches!(self, Diagnostic::Warning { .. })
     }
 
-    pub fn is_error(&self) -> bool {
+    pub const fn is_error(&self) -> bool {
         matches!(self, Diagnostic::Error { .. })
     }
 }
@@ -249,7 +249,7 @@ impl<'a> Collector<'a> {
         &self.items
     }
 
-    pub fn new(mode: HandlingMode) -> Self {
+    pub const fn new(mode: HandlingMode) -> Self {
         Self {
             items: Vec::new(),
             mode,
