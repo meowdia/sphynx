@@ -261,7 +261,6 @@ impl<'a> Collector<'a> {
     pub fn push_diagnostic(&mut self, diagnostic: Diagnostic<'a>) -> Result<(), SdpIssue<'a>> {
         match self.mode {
             HandlingMode::BestEffort(opt) | HandlingMode::Recover(opt) => {
-                self.items.push(diagnostic);
                 if let Some(md) = opt.max_diagnostics
                     && self.items.len() >= md.into()
                 {
@@ -272,6 +271,7 @@ impl<'a> Collector<'a> {
                         location: None,
                     });
                 }
+                self.items.push(diagnostic);
                 Ok(())
             }
             HandlingMode::Strict => {
