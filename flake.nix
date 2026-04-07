@@ -30,7 +30,14 @@
           overlays = [ fenix.overlays.default ];
         };
 
-        craneLib = (crane.mkLib pkgs).overrideToolchain (pkgs.fenix.stable.toolchain);
+        craneLib = (crane.mkLib pkgs).overrideToolchain (
+          pkgs.fenix.stable.withComponents [
+            "cargo"
+            "rustc"
+            "rustfmt"
+            "clippy"
+          ]
+        );
 
         commonArgs = {
           src = craneLib.cleanCargoSource ./.;
@@ -44,9 +51,11 @@
           }
         );
 
-        cargoArtifactsDev = cargoArtifacts.overrideAttrs (final: prev: {
-          CARGO_PROFILE = "dev";
-        });
+        cargoArtifactsDev = cargoArtifacts.overrideAttrs (
+          final: prev: {
+            CARGO_PROFILE = "dev";
+          }
+        );
 
         sphynxClippy = craneLib.cargoClippy (
           commonArgs
@@ -94,7 +103,7 @@
                   type = "app";
                   program = "${cmd}";
                   meta = {
-                    description = ''runs `just ${name}`'';
+                    description = "runs `just ${name}`";
                   };
                 };
               }
