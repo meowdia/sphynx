@@ -40,14 +40,21 @@
         );
 
         commonArgs = {
-          src = craneLib.cleanCargoSource ./.;
+          src = pkgs.lib.fileset.toSource {
+            root = ./.;
+            fileset = pkgs.lib.fileset.unions [
+              (craneLib.fileset.commonCargoSources ./.)
+              ./iana
+            ];
+          };
           strictDeps = true;
         };
 
         cargoArtifacts = craneLib.buildDepsOnly (
           commonArgs
           // {
-            pname = "sphynx-deps";
+            cargoExtraArgs = "--workspace";
+            pname = "sphynx";
           }
         );
 
@@ -82,6 +89,16 @@
             inherit cargoArtifacts;
           }
         );
+
+        iana = craneLib.mkCargoDerivation (commonArgs // {
+          pname = "xtask";
+          cargoArtifacts = cargoArtifactsDev;
+          CARGO_PROFILE = "dev";
+
+          nativeBuildInputs = [ pkgs.git ];
+
+          buildPhaseCargoCommand = "cargo run -p xtask -- iana check";
+        });
       in
       {
         checks = {
@@ -124,6 +141,7 @@
           ci_fmt = sphynxFmt;
           deps = cargoArtifacts;
           deps_dev = cargoArtifactsDev;
+          iana_check = iana;
           lib = sphynx;
         };
 

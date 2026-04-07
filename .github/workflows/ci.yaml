@@ -25,7 +25,7 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
-      - run: nix develop -c just iana-check
+      - run: nix build .#iana_check
 
   check:
     runs-on: ubuntu-latest
