@@ -30,23 +30,39 @@
           overlays = [ fenix.overlays.default ];
         };
 
-        craneLib = (crane.mkLib pkgs).overrideToolchain (pkgs.fenix.stable.toolchain);
+        craneLib = (crane.mkLib pkgs).overrideToolchain (
+          pkgs.fenix.stable.withComponents [
+            "cargo"
+            "rustc"
+            "rustfmt"
+            "clippy"
+          ]
+        );
 
         commonArgs = {
-          src = craneLib.cleanCargoSource ./.;
+          src = pkgs.lib.fileset.toSource {
+            root = ./.;
+            fileset = pkgs.lib.fileset.unions [
+              (craneLib.fileset.commonCargoSources ./.)
+              ./iana
+            ];
+          };
           strictDeps = true;
         };
 
         cargoArtifacts = craneLib.buildDepsOnly (
           commonArgs
           // {
-            pname = "sphynx-deps";
+            cargoExtraArgs = "--workspace";
+            pname = "sphynx";
           }
         );
 
-        cargoArtifactsDev = cargoArtifacts.overrideAttrs (final: prev: {
-          CARGO_PROFILE = "dev";
-        });
+        cargoArtifactsDev = cargoArtifacts.overrideAttrs (
+          final: prev: {
+            CARGO_PROFILE = "dev";
+          }
+        );
 
         sphynxClippy = craneLib.cargoClippy (
           commonArgs
@@ -73,6 +89,16 @@
             inherit cargoArtifacts;
           }
         );
+
+        iana = craneLib.mkCargoDerivation (commonArgs // {
+          pname = "xtask";
+          cargoArtifacts = cargoArtifactsDev;
+          CARGO_PROFILE = "dev";
+
+          nativeBuildInputs = [ pkgs.git ];
+
+          buildPhaseCargoCommand = "cargo run -p xtask -- iana check";
+        });
       in
       {
         checks = {
@@ -94,7 +120,7 @@
                   type = "app";
                   program = "${cmd}";
                   meta = {
-                    description = ''runs `just ${name}`'';
+                    description = "runs `just ${name}`";
                   };
                 };
               }
@@ -115,6 +141,7 @@
           ci_fmt = sphynxFmt;
           deps = cargoArtifacts;
           deps_dev = cargoArtifactsDev;
+          iana_check = iana;
           lib = sphynx;
         };
 
