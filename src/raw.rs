@@ -3,6 +3,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Display,
     hash::{Hash, Hasher},
     iter::FusedIterator,
     slice,
@@ -177,6 +178,12 @@ impl<'a> RawLine<'a> {
     }
 }
 
+impl Display for RawLine<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}={}", char::from(self.kind), self.value)
+    }
+}
+
 impl<'a> RawSectionLookup<'a> {
     fn new(lines: &[RawLine<'a>]) -> Self {
         let mut lookup = Self::default();
@@ -263,6 +270,15 @@ impl<'a> RawSection<'a> {
 
     pub fn attributes(&self, key: &str) -> RawLineIter<'_, 'a> {
         self.lines_by_key(b'a', key)
+    }
+}
+
+impl Display for RawSection<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for line in &self.lines {
+            write!(f, "{line}\r\n")?;
+        }
+        Ok(())
     }
 }
 
@@ -379,6 +395,13 @@ impl<'a> RawMediaDescription<'a> {
 
     pub fn attributes(&self, key: &str) -> RawLineIter<'_, 'a> {
         self.section.attributes(key)
+    }
+}
+
+impl Display for RawMediaDescription<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}\r\n", self.description)?;
+        write!(f, "{}", self.section)
     }
 }
 
@@ -582,6 +605,16 @@ impl<'a> RawSession<'a> {
     }
 }
 
+impl Display for RawSession<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.session)?;
+        for section in &self.media_sections {
+            write!(f, "{section}")?;
+        }
+        Ok(())
+    }
+}
+
 impl PartialEq for RawSession<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.session == other.session && self.media_sections == other.media_sections
@@ -662,7 +695,10 @@ impl<'a> RawSessionParser<'a> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        error::{Collector, HandlingMode, HandlingOptions, SdpIssue, SdpIssueKind, SdpLocation},
+        error::{
+            Collector, HandlingMode, HandlingOptions, SdpIssue, SdpIssueKind, SdpLocation,
+            SdpOptions,
+        },
         raw::{RawKeyValue, RawLine, RawSession},
     };
 
@@ -984,5 +1020,50 @@ mod tests {
                 value: Some("97 nack pli"),
             })
         );
+    }
+
+    #[test]
+    fn write_roundtrip_line() {
+        let rt = |l| {
+            let parsed = RawLine::parse(l, 0, &mut Collector::new(HandlingMode::Strict)).unwrap();
+            assert_eq!(
+                parsed,
+                RawLine::parse(
+                    &format!("{parsed}"),
+                    0,
+                    &mut Collector::new(HandlingMode::Strict)
+                )
+                .unwrap()
+            );
+        };
+
+        rt("v=0");
+        rt("m=video 9 RTP/AVP 0 96");
+        rt("a=cryptex");
+        rt("b=AS:1000");
+        rt("c=IN IP4 127.0.0.1");
+    }
+
+    #[test]
+    fn write_roundtrip_skipped_media() {
+        const SDP: &str = "v=0\r\ns=Test SDP\r\nm=video 12345 RTP/AVP 0\r\ninvalid_line\r\nm=audio 12347 RTP/AVP 1\r\nc=IN IP4 10.0.0.1\r\n";
+
+        let parse = |sdp| {
+            RawSession::parse_document(sdp, &mut Collector::new(SdpOptions::recover(None).mode))
+                .unwrap()
+        };
+        let parsed = parse(SDP);
+        assert_eq!(parsed, parse(&format!("{parsed}")));
+    }
+
+    #[test]
+    fn write_roundtrip_doc() {
+        const SDP: &str = "v=0\r\no=jdoe 3724394400 3724394405 IN IP4 198.51.100.1\r\ns=Call to John Smith\r\ni=SDP Offer #1\r\nu=http://www.jdoe.example.com/home.html\r\ne=Jane Doe <jane@jdoe.example.com>\r\np=+1 617 555-6011\r\nc=IN IP4 198.51.100.1\r\nt=0 0\r\nm=audio 49170 RTP/AVP 0\r\nm=audio 49180 RTP/AVP 0\r\nm=video 51372 RTP/AVP 99\r\nc=IN IP6 2001:db8::2\r\na=rtpmap:99 h263-1998/90000\r\n";
+
+        let parse = |sdp| {
+            RawSession::parse_document(sdp, &mut Collector::new(HandlingMode::Strict)).unwrap()
+        };
+        let parsed = parse(SDP);
+        assert_eq!(parsed, parse(&format!("{parsed}")));
     }
 }
