@@ -6,6 +6,10 @@ name: CI
 on:
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   reuse:
     runs-on: ubuntu-latest
@@ -13,61 +17,41 @@ jobs:
       - uses: actions/checkout@v6
       - uses: fsfe/reuse-action@v5
 
-  iana:
+  checks:
+    name: checks (${{ matrix.id }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: fmt
+            target: .#ci_fmt
+          - id: clippy
+            target: .#ci_clippy
+          - id: test
+            target: .#ci_test
+          - id: build
+            target: .#lib
+          - id: iana
+            target: .#iana_check
+
     steps:
       - uses: actions/checkout@v6
+
       - uses: wimpysworld/nothing-but-nix@main
         with:
           root-safe-haven: "8192"
           mnt-safe-haven: "4096"
-      - uses: cachix/install-nix-action@v31
-        with:
-          extra_nix_config: |
-            accept-flake-config = true
-      - run: nix build .#iana_check
-
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: wimpysworld/nothing-but-nix@main
-        with:
-          root-safe-haven: "8192"
-          mnt-safe-haven: "4096"
 
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             accept-flake-config = true
-      - run: nix build .#ci_fmt
-        id: fmt
-        name: Run `cargo fmt`
-        continue-on-error: true
-      - run: nix log .#ci_fmt
-        if: ${{ always() && steps.fmt.outcome == 'failure' }}
-        name: Logs (fmt)
-      - run: nix build .#ci_clippy
-        id: clippy
-        name: Run `cargo clippy`
-        continue-on-error: true
-      - run: nix log .#ci_clippy
-        if: ${{ always() && steps.clippy.outcome == 'failure' }}
-        name: Logs (clippy)
-      - run: nix build .#ci_test
-        id: test
-        name: Run `cargo test`
-        continue-on-error: true
-      - run: nix log .#ci_test
-        if: ${{ always() && steps.test.outcome == 'failure' }}
-        name: Logs (test)
-      - run: nix build .#lib
-        id: build
-        name: Run nix build
-        continue-on-error: true
-      - run: nix log .#lib
-        if: ${{ always() && steps.build.outcome == 'failure' }}
-        name: Logs (build)
-      - run: exit 1
-        if: ${{ always() && (steps.fmt.outcome == 'failure' || steps.clippy.outcome == 'failure' || steps.test.outcome == 'failure' || steps.build.outcome == 'failure') }}
-        name: Exit on failure
+
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', '**/*.nix', 'Cargo.lock') }}
+          restore-prefixes-first-match: |
+            nix-${{ runner.os }}-
+
+      - run: nix build -L ${{ matrix.target }}
