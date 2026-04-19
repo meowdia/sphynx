@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Meowdia Community
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
+
 use std::{
     collections::BTreeSet,
     env,
