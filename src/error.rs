@@ -289,6 +289,12 @@ pub struct Diagnostics<'a> {
     pub items: Vec<Diagnostic<'a>>,
 }
 
+impl<'a> Diagnostics<'a> {
+    pub const fn new(items: Vec<Diagnostic<'a>>) -> Self {
+        Self { items }
+    }
+}
+
 /// A fatal SDP failure that prevented normal completion.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Error)]
@@ -301,6 +307,10 @@ pub struct SdpFailure<'a> {
 }
 
 impl<'a> SdpFailure<'a> {
+    pub const fn new(issue: SdpIssue<'a>, diagnostics: Diagnostics<'a>) -> Self {
+        Self { issue, diagnostics }
+    }
+
     pub const fn code(&self) -> &'static str {
         self.issue.code()
     }
@@ -312,6 +322,12 @@ impl<'a> SdpFailure<'a> {
 pub struct SdpOutput<'a, T> {
     pub value: T,
     pub diagnostics: Diagnostics<'a>,
+}
+
+impl<'a, T> SdpOutput<'a, T> {
+    pub const fn new(value: T, diagnostics: Diagnostics<'a>) -> Self {
+        Self { value, diagnostics }
+    }
 }
 
 /// Result of an SDP operation that may collect recoverable diagnostics.
