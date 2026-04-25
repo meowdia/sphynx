@@ -9,7 +9,10 @@ use std::{
     slice,
 };
 
-use crate::error::{Collector, Diagnostic, HandlingMode, SdpIssue, SdpIssueKind, SdpLocation};
+use crate::error::{
+    Collector, Diagnostic, Diagnostics, HandlingMode, SdpFailure, SdpIssue, SdpIssueKind,
+    SdpLocation, SdpOptions, SdpOutput, SdpResult,
+};
 
 /// An unparsed SDP line, with only its type.
 /// [RFC8866-5](https://datatracker.ietf.org/doc/html/rfc8866#section-5)
@@ -528,6 +531,17 @@ impl<'a> RawSession<'a> {
             session: RawSection::new(session),
             media_sections,
             media_lookup,
+        }
+    }
+
+    pub fn parse(sdp: &'a str, options: SdpOptions) -> SdpResult<'a, Self> {
+        let mut collector = Collector::new(options.mode);
+
+        match Self::parse_document(sdp, &mut collector) {
+            Ok(session) => {
+                SdpResult::Ok(SdpOutput::new(session, Diagnostics::new(collector.items)))
+            }
+            Err(e) => SdpResult::Err(SdpFailure::new(e, Diagnostics::new(collector.items))),
         }
     }
 
