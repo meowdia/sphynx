@@ -7,7 +7,7 @@ use std::{
     borrow::Cow,
     fmt::Display,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    num::NonZeroU16,
+    num::{NonZeroI64, NonZeroU16},
     ops::Deref,
     str::FromStr,
 };
@@ -22,71 +22,7 @@ use crate::{
     },
 };
 
-macro_rules! enum_attribute {
-    (
-        $(#[$doc:meta])*
-        $enum_name:ident,
-        $($name:ident => $value:literal),+
-    ) => {
-        $(#[$doc])*
-        pub enum $enum_name {
-            $($name),+
-        }
-
-        impl $enum_name {
-            pub const ALL: &[Self] = &[$(Self::$name),+];
-
-            pub const fn as_str(&self) -> &'static str {
-                match self {
-                    $(Self::$name => $value),+
-                }
-            }
-
-            fn from_str(val: &str) -> Option<Self> {
-                match val {
-                    $($value => Some(Self::$name),)+
-                    _ => None
-                }
-            }
-
-            pub fn from_str_ignore_ascii_case(val: &str) -> Option<(Self, Option<&str>)> {
-                match val {
-                    $($value => Some((Self::$name, None)),)+
-                    $(v if v.eq_ignore_ascii_case($value) => Some((Self::$name, Some(v))),)+
-                    _ => None
-                }
-            }
-        }
-
-        impl AsRef<str> for $enum_name {
-            fn as_ref(&self) -> &str {
-                self.as_str()
-            }
-        }
-
-        impl FromStr for $enum_name {
-            type Err = ();
-
-            fn from_str(val: &str) -> Result<Self, Self::Err> {
-                Self::from_str(val).ok_or(())
-            }
-        }
-
-        impl TryFrom<&str> for $enum_name {
-            type Error = ();
-
-            fn try_from(value: &str) -> Result<Self, Self::Error> {
-                Self::from_str(value).ok_or(())
-            }
-        }
-
-        impl Display for $enum_name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.write_str(self.as_str())
-            }
-        }
-    }
-}
+pub mod attributes;
 
 /// > ```text
 /// > b=<bwtype>:<bandwidth>
@@ -112,16 +48,6 @@ impl FromStr for BandwidthInformation {
         })
     }
 }
-
-enum_attribute!(
-    /// [RFC8866-6.9](https://datatracker.ietf.org/doc/html/rfc8866#section-6.9)
-    ConferenceType,
-    Broadcast => "broadcast",
-    Meeting => "meetings",
-    Moderated => "moderated",
-    Test => "test",
-    H332 => "H332"
-);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ConnectionAddress<'a> {
@@ -259,97 +185,6 @@ impl Display for ConnectionInformation<'_> {
     }
 }
 
-enum_attribute!(
-    /// [RFC8866-6.7](https://datatracker.ietf.org/doc/html/rfc8866#section-6.7)
-    Direction,
-    SendOnly => "sendonly",
-    SendRecv => "sendrecv",
-    RecvOnly => "recvonly",
-    Inactive => "inactive"
-);
-
-/// > ```text
-/// > fmtp-value = fmt SP format-specific-params
-/// > format-specific-params = byte-string
-/// >    ; Notes:
-/// >    ; - The format parameters are media type parameters and
-/// >    ;   need to reflect their syntax.
-/// > ```
-///
-/// > ```text
-/// > fmt = token
-/// >       ;typically an RTP payload type for audio
-/// >       ;and video media
-/// > ```
-///
-/// [RFC8866-6.15](https://datatracker.ietf.org/doc/html/rfc8866#section-6.15)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Fmtp<'a> {
-    pub format: Cow<'a, str>,
-    pub params: Cow<'a, str>,
-}
-
-impl<'a> Fmtp<'a> {
-    pub fn new(format: impl Into<Cow<'a, str>>, params: impl Into<Cow<'a, str>>) -> Self {
-        Self {
-            format: format.into(),
-            params: params.into(),
-        }
-    }
-
-    pub const fn new_owned(format: String, params: String) -> Fmtp<'static> {
-        Fmtp {
-            format: Cow::Owned(format),
-            params: Cow::Owned(params),
-        }
-    }
-
-    pub fn into_owned(self) -> Fmtp<'static> {
-        Fmtp::new_owned(self.format.into_owned(), self.params.into_owned())
-    }
-}
-
-impl<'a> TryFrom<&'a str> for Fmtp<'a> {
-    type Error = ();
-
-    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        let mut parts = value.splitn(2, ' ');
-        let format = parts.next().ok_or(())?;
-        let params = parts.next().ok_or(())?;
-
-        Ok(Self::new(format, params))
-    }
-}
-
-impl<'a> Display for Fmtp<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}", self.format, self.params)
-    }
-}
-
-/// [RFC8866-6.13](https://datatracker.ietf.org/doc/html/rfc8866#section-6.13)
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct FrameRate(pub f32);
-
-impl FromStr for FrameRate {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parsed: f32 = s.parse().map_err(|_| ())?;
-        if parsed.is_normal() && parsed.is_sign_positive() {
-            Ok(Self(parsed))
-        } else {
-            Err(())
-        }
-    }
-}
-
-impl Display for FrameRate {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 /// > ```text
 /// > media-field =         %s"m" "=" media SP port ["/" integer]
 /// >                           SP proto 1*(SP fmt) CRLF
@@ -390,6 +225,7 @@ impl<'a> TryFrom<&'a str> for MediaField<'a> {
         let Some(port) = parts.next() else {
             return Err(());
         };
+
         let (port, num_port) = if let Some((p, n)) = port.split_once('/') {
             (p.parse().map_err(|_| ())?, Some(n.parse().map_err(|_| ())?))
         } else {
@@ -622,62 +458,59 @@ impl<T: Deref<Target = str>> Deref for NonWsString<T> {
     }
 }
 
-enum_attribute!(
-    /// [RFC8866-6.8](https://datatracker.ietf.org/doc/html/rfc8866#section-6.8)
-    Orientation,
-    Landscape => "landscape",
-    Portrait => "portrait",
-    Seascape => "seascape"
-);
+/// > ```text
+/// > r=<repeat interval> <active duration> <offsets from start-time>
+/// > ```
+/// [RFC8866-5.10](https://datatracker.ietf.org/doc/html/rfc8866#section-5.10)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepeatTimes {
+    interval: i64,
+    duration: i64,
+    offsets: Vec<i64>,
+}
 
-/// [RFC8866-6.4](https://datatracker.ietf.org/doc/html/rfc8866#section-6.4)
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct PacketTime(pub f32);
+fn parse_timed_time(val: &str) -> Option<i64> {
+    let (mul, rest) = match val.char_indices().next_back()? {
+        (i, 'd') => (60 * 60 * 24, &val[..i]),
+        (i, 'h') => (60 * 60, &val[..i]),
+        (i, 'm') => (60, &val[..i]),
+        (i, 's') => (1, &val[..i]),
+        (_, x) if x.is_numeric() => (1, val),
+        _ => return None,
+    };
+    rest.parse().map(|v: i64| v * mul).ok()
+}
 
-impl FromStr for PacketTime {
+impl FromStr for RepeatTimes {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parsed: f32 = s.parse().map_err(|_| ())?;
-        if parsed.is_normal() && parsed.is_sign_positive() {
-            Ok(Self(parsed))
-        } else {
-            Err(())
-        }
+        let mut times = s.split(' ').map(parse_timed_time);
+
+        let Some(interval) = times.next().flatten() else {
+            return Err(());
+        };
+        let Some(duration) = times.next().flatten() else {
+            return Err(());
+        };
+
+        let offsets = times.map(|o| o.ok_or(())).collect::<Result<_, _>>()?;
+
+        Ok(Self {
+            interval,
+            duration,
+            offsets,
+        })
     }
 }
 
-impl Display for PacketTime {
+impl Display for RepeatTimes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-/// [RFC8866-6.14](https://datatracker.ietf.org/doc/html/rfc8866#section-6.14)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Quality(u8);
-
-impl Quality {
-    /// Returns `None` if `quality` is not in range `0..=10`
-    pub const fn new(quality: u8) -> Option<Self> {
-        match quality {
-            q @ 0..=10 => Some(Self(q)),
-            _ => None,
+        write!(f, "{} {}", self.interval, self.duration)?;
+        for offset in &self.offsets {
+            write!(f, " {offset}")?;
         }
-    }
-}
-
-impl FromStr for Quality {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::new(s.parse().map_err(|_| ())?).ok_or(())
-    }
-}
-
-impl Display for Quality {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        Ok(())
     }
 }
 
@@ -687,7 +520,62 @@ impl Display for Quality {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TimeField {
     pub start_time: i64,
-    pub stop_time: i64,
+    pub stop_time: Option<NonZeroI64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Repeats<'a> {
+    time_field: TimeField,
+    repeat: usize,
+    repeat_times: &'a RepeatTimes,
+    offsets: &'a [i64],
+}
+
+impl Iterator for Repeats<'_> {
+    type Item = i64;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let time = if let [offset, rest @ ..] = self.offsets {
+            self.offsets = rest;
+            self.time_field.start_time + (self.repeat_times.interval * self.repeat as i64) + offset
+        } else {
+            let (offset, rest) = &self.repeat_times.offsets.split_first().unwrap_or((&0, &[]));
+            self.offsets = rest;
+
+            if !self.repeat_times.offsets.is_empty() {
+                self.repeat += 1;
+            }
+
+            let time = self.time_field.start_time
+                + (self.repeat_times.interval * self.repeat as i64)
+                + *offset;
+
+            if self.repeat_times.offsets.is_empty() {
+                self.repeat += 1;
+            }
+
+            time
+        };
+
+        if let Some(stop) = self.time_field.stop_time
+            && time < stop.get()
+        {
+            Some(time)
+        } else {
+            None
+        }
+    }
+}
+
+impl TimeField {
+    pub fn repeats<'a>(&self, repeat_times: &'a RepeatTimes) -> Repeats<'a> {
+        Repeats {
+            time_field: *self,
+            repeat: 0,
+            repeat_times,
+            offsets: &repeat_times.offsets,
+        }
+    }
 }
 
 impl FromStr for TimeField {
@@ -698,14 +586,61 @@ impl FromStr for TimeField {
 
         Ok(Self {
             start_time: start.parse().map_err(|_| ())?,
-            stop_time: stop.parse().map_err(|_| ())?,
+            stop_time: stop.parse::<i64>().map(NonZeroI64::new).map_err(|_| ())?,
         })
     }
 }
 
 impl Display for TimeField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}", self.start_time, self.stop_time)
+        write!(
+            f,
+            "{} {}",
+            self.start_time,
+            self.stop_time.map(NonZeroI64::get).unwrap_or(0)
+        )
+    }
+}
+
+pub struct TimezoneAdjustments {
+    /// (<adjustment time>, <offset>) in seconds
+    pub adjustments: Vec<(i64, i64)>,
+}
+
+impl FromStr for TimezoneAdjustments {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split(' ');
+        let mut adjs = Vec::new();
+        loop {
+            match (parts.next(), parts.next()) {
+                (Some(adj), Some(offs)) => {
+                    let (Ok(adj), Some(offs)) = (adj.parse::<i64>(), parse_timed_time(offs)) else {
+                        break Err(());
+                    };
+                    adjs.push((adj, offs));
+                }
+                (None, None) => break Ok(Self { adjustments: adjs }),
+                _ => break Err(()),
+            }
+        }
+    }
+}
+
+impl Display for TimezoneAdjustments {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let [first, rest @ ..] = &self.adjustments[..] else {
+            return Ok(());
+        };
+
+        write!(f, "{} {}", first.0, first.1)?;
+
+        for (adj, offs) in rest {
+            write!(f, " {adj} {offs}")?;
+        }
+
+        Ok(())
     }
 }
 
@@ -772,9 +707,84 @@ mod test {
         iana::{KnownAddressType, KnownNetworkType},
         sdp::{
             ConnectionAddress, ConnectionInformation, MediaField, MulticastIpv4Addr,
-            MulticastIpv6Addr, UnicastIpv4Addr, UnicastIpv6Addr,
+            MulticastIpv6Addr, RepeatTimes, TimeField, UnicastIpv4Addr, UnicastIpv6Addr,
+            parse_timed_time,
         },
     };
+
+    #[test]
+    fn repeat_time_value() {
+        assert_eq!(parse_timed_time("7d"), Some(7 * 60 * 60 * 24));
+        assert_eq!(parse_timed_time("6h"), Some(6 * 60 * 60));
+        assert_eq!(parse_timed_time("10m"), Some(10 * 60));
+        assert_eq!(parse_timed_time("10s"), Some(10));
+        assert_eq!(parse_timed_time("10"), Some(10));
+    }
+
+    #[test]
+    fn repeat_time_iter() {
+        let timef = TimeField {
+            start_time: 0,
+            stop_time: Some((60 * 60 * 24 * 10).try_into().unwrap()),
+        };
+
+        let repeats = RepeatTimes {
+            interval: 3600,
+            duration: 10,
+            offsets: vec![0, 1800],
+        };
+
+        let repeats: Vec<_> = timef.repeats(&repeats).collect();
+
+        assert_eq!(&repeats[..4], [0, 1800, 3600, 5400]);
+
+        assert!(
+            repeats
+                .last()
+                .is_some_and(|l| *l < timef.stop_time.unwrap().get())
+        );
+
+        let repeats = RepeatTimes {
+            interval: 1800,
+            duration: 10,
+            offsets: vec![0, 60, 120],
+        };
+
+        let repeats: Vec<_> = timef.repeats(&repeats).collect();
+
+        assert_eq!(&repeats[..6], [0, 60, 120, 1800, 1860, 1920]);
+
+        assert!(
+            repeats
+                .last()
+                .is_some_and(|l| *l < timef.stop_time.unwrap().get())
+        );
+
+        let repeats = RepeatTimes {
+            interval: 1800,
+            duration: 10,
+            offsets: vec![0],
+        };
+
+        let repeats: Vec<_> = timef.repeats(&repeats).collect();
+
+        assert_eq!(&repeats[..3], [0, 1800, 3600]);
+
+        assert!(
+            repeats
+                .last()
+                .is_some_and(|l| *l < timef.stop_time.unwrap().get())
+        );
+
+        let zero_offsets = RepeatTimes {
+            interval: 1800,
+            duration: 10,
+            offsets: vec![],
+        };
+
+        let zero_offset_repeats: Vec<_> = timef.repeats(&zero_offsets).collect();
+        assert_eq!(zero_offset_repeats, repeats);
+    }
 
     #[test]
     fn media_description() {
