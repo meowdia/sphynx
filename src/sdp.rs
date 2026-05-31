@@ -96,11 +96,11 @@ impl<'a> ConnectionAddress<'a> {
                     num_addr,
                 }))
             }
-            (IpAddr::V4(addr), _, None, None) => Some(Self::V4Unicast(UnicastIpv4Addr(addr))),
+            (IpAddr::V4(addr), false, None, None) => Some(Self::V4Unicast(UnicastIpv4Addr(addr))),
             (IpAddr::V6(addr), true, num_addr, None) => {
                 Some(Self::V6Multicast(MulticastIpv6Addr { addr, num_addr }))
             }
-            (IpAddr::V6(addr), _, None, None) => Some(Self::V6Unicast(UnicastIpv6Addr(addr))),
+            (IpAddr::V6(addr), false, None, None) => Some(Self::V6Unicast(UnicastIpv6Addr(addr))),
             _ => None,
         }
     }
