@@ -32,8 +32,6 @@ jobs:
             target: .#ci_test
           - id: build
             target: .#lib
-          - id: iana
-            target: .#iana_check
 
     steps:
       - uses: actions/checkout@v6

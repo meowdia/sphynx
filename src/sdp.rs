@@ -16,10 +16,7 @@ use thiserror::Error;
 
 use crate::{
     error::SdpIssueKind,
-    iana::{
-        KnownAddressType, KnownBandwidthType, KnownMediaType, KnownNetworkType,
-        KnownTransportProtocol,
-    },
+    iana::{Addrtype, Bwtype, Media, Nettype, Proto, Registered},
 };
 
 pub mod attributes;
@@ -29,7 +26,7 @@ pub mod attributes;
 /// > ```
 /// [RFC8866-5.8](https://datatracker.ietf.org/doc/html/rfc8866#section-5.8)
 pub struct BandwidthInformation {
-    pub bwtype: KnownBandwidthType,
+    pub bwtype: Bwtype<'static>,
     /// bandwidth in kilobits per second (kb/s)
     pub bandwidth: u64,
 }
@@ -43,7 +40,7 @@ impl FromStr for BandwidthInformation {
         };
 
         Ok(Self {
-            bwtype: KnownBandwidthType::from_name(bwtype).ok_or(())?,
+            bwtype: Bwtype::registered(bwtype).ok_or(())?,
             bandwidth: bandwidth.parse().map_err(|_| ())?,
         })
     }
@@ -132,15 +129,15 @@ impl Display for ConnectionAddress<'_> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConnectionInformation<'a> {
-    pub net_type: KnownNetworkType,
-    pub addr_type: KnownAddressType,
+    pub net_type: Nettype<'static>,
+    pub addr_type: Addrtype<'static>,
     pub addr: ConnectionAddress<'a>,
 }
 
 impl<'a> ConnectionInformation<'a> {
     pub const fn new(
-        net_type: KnownNetworkType,
-        addr_type: KnownAddressType,
+        net_type: Nettype<'static>,
+        addr_type: Addrtype<'static>,
         addr: ConnectionAddress<'a>,
     ) -> Self {
         Self {
@@ -161,10 +158,10 @@ impl<'a> TryFrom<&'a str> for ConnectionInformation<'a> {
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         let mut parts = value.splitn(3, ' ');
 
-        let Some(net_type) = parts.next().and_then(KnownNetworkType::from_name) else {
+        let Some(net_type) = parts.next().and_then(Nettype::registered) else {
             return Err(SdpIssueKind::MalformedMediaSection);
         };
-        let Some(addr_type) = parts.next().and_then(KnownAddressType::from_name) else {
+        let Some(addr_type) = parts.next().and_then(Addrtype::registered) else {
             return Err(SdpIssueKind::MalformedMediaSection);
         };
         let Some(addr) = parts.next().map(ConnectionAddress::from) else {
@@ -193,9 +190,9 @@ impl Display for ConnectionInformation<'_> {
 /// [RFC8866-5.14](https://datatracker.ietf.org/doc/html/rfc8866#section-5.14)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MediaField<'a> {
-    pub media_type: KnownMediaType,
+    pub media_type: Media<'static>,
     pub port: (u16, Option<NonZeroU16>),
-    pub proto: KnownTransportProtocol,
+    pub proto: Proto<'static>,
     pub fmt: Vec<Cow<'a, str>>,
 }
 
@@ -218,7 +215,7 @@ impl<'a> TryFrom<&'a str> for MediaField<'a> {
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         let mut parts = value.split(' ');
 
-        let Some(media_type) = parts.next().and_then(KnownMediaType::from_name) else {
+        let Some(media_type) = parts.next().and_then(Media::registered) else {
             return Err(());
         };
 
@@ -232,7 +229,7 @@ impl<'a> TryFrom<&'a str> for MediaField<'a> {
             (port.parse().map_err(|_| ())?, None)
         };
 
-        let Some(proto) = parts.next().and_then(KnownTransportProtocol::from_name) else {
+        let Some(proto) = parts.next().and_then(Proto::registered) else {
             return Err(());
         };
 
@@ -704,7 +701,7 @@ mod test {
     use std::net::Ipv4Addr;
 
     use crate::{
-        iana::{KnownAddressType, KnownNetworkType},
+        iana::{Addrtype, Media, Nettype, Proto},
         sdp::{
             ConnectionAddress, ConnectionInformation, MediaField, MulticastIpv4Addr,
             MulticastIpv6Addr, RepeatTimes, TimeField, UnicastIpv4Addr, UnicastIpv6Addr,
@@ -799,9 +796,9 @@ mod test {
         test_md(
             "video 6767 RTP/AVP 67",
             MediaField {
-                media_type: crate::iana::KnownMediaType::Video,
+                media_type: Media::VIDEO,
                 port: (6767, None),
-                proto: crate::iana::KnownTransportProtocol::RtpAvp,
+                proto: Proto::RTP_AVP,
                 fmt: vec!["67".into()],
             },
         );
@@ -809,9 +806,9 @@ mod test {
         test_md(
             "video 6767/2 RTP/SAVPF 67",
             MediaField {
-                media_type: crate::iana::KnownMediaType::Video,
+                media_type: Media::VIDEO,
                 port: (6767, Some(2.try_into().unwrap())),
-                proto: crate::iana::KnownTransportProtocol::RtpSavpf,
+                proto: Proto::RTP_SAVPF,
                 fmt: vec!["67".into()],
             },
         );
@@ -830,8 +827,8 @@ mod test {
         test_parse(
             "IN IP4 233.252.0.1/127",
             ConnectionInformation::new(
-                KnownNetworkType::InValue,
-                KnownAddressType::Ip4,
+                Nettype::IN,
+                Addrtype::IP4,
                 ConnectionAddress::V4Multicast(
                     MulticastIpv4Addr::new(
                         Ipv4Addr::new(233, 252, 0, 1),
@@ -845,8 +842,8 @@ mod test {
         test_parse(
             "IN IP6 ff00::db8:0:101/3",
             ConnectionInformation::new(
-                KnownNetworkType::InValue,
-                KnownAddressType::Ip6,
+                Nettype::IN,
+                Addrtype::IP6,
                 ConnectionAddress::V6Multicast(
                     MulticastIpv6Addr::new(
                         "ff00::db8:0:101".parse().unwrap(),
@@ -859,8 +856,8 @@ mod test {
         test_parse(
             "IN IP6 cafe::db8:0:101",
             ConnectionInformation::new(
-                KnownNetworkType::InValue,
-                KnownAddressType::Ip6,
+                Nettype::IN,
+                Addrtype::IP6,
                 ConnectionAddress::V6Unicast(
                     UnicastIpv6Addr::new("cafe::db8:0:101".parse().unwrap()).unwrap(),
                 ),

@@ -42,10 +42,7 @@
         commonArgs = {
           src = pkgs.lib.fileset.toSource {
             root = ./.;
-            fileset = pkgs.lib.fileset.unions [
-              (craneLib.fileset.commonCargoSources ./.)
-              ./iana
-            ];
+            fileset = craneLib.fileset.commonCargoSources ./.;
           };
           strictDeps = true;
         };
@@ -89,16 +86,6 @@
             inherit cargoArtifacts;
           }
         );
-
-        iana = craneLib.mkCargoDerivation (commonArgs // {
-          pname = "xtask";
-          cargoArtifacts = cargoArtifactsDev;
-          CARGO_PROFILE = "dev";
-
-          nativeBuildInputs = [ pkgs.git ];
-
-          buildPhaseCargoCommand = "cargo run -p xtask -- iana check";
-        });
       in
       {
         checks = {
@@ -141,7 +128,6 @@
           ci_fmt = sphynxFmt;
           deps = cargoArtifacts;
           deps_dev = cargoArtifactsDev;
-          iana_check = iana;
           lib = sphynx;
         };
 

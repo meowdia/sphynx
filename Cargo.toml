@@ -8,10 +8,10 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace]
-members = ["xtask"]
 resolver = "3"
 
 [dependencies]
+iana-sdp = { version = "0.1.0", features = ["sdp-parameters"] }
 thiserror = "2.0.18"
 
 [lints]
