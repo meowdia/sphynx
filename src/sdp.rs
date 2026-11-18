@@ -475,7 +475,7 @@ fn parse_timed_time(val: &str) -> Option<i64> {
         (_, x) if x.is_numeric() => (1, val),
         _ => return None,
     };
-    rest.parse().map(|v: i64| v * mul).ok()
+    rest.parse::<i64>().ok()?.checked_mul(mul)
 }
 
 impl FromStr for RepeatTimes {
@@ -704,8 +704,8 @@ mod test {
         iana::{Addrtype, Media, Nettype, Proto},
         sdp::{
             ConnectionAddress, ConnectionInformation, MediaField, MulticastIpv4Addr,
-            MulticastIpv6Addr, RepeatTimes, TimeField, UnicastIpv4Addr, UnicastIpv6Addr,
-            parse_timed_time,
+            MulticastIpv6Addr, RepeatTimes, TimeField, TimezoneAdjustments, UnicastIpv4Addr,
+            UnicastIpv6Addr, parse_timed_time,
         },
     };
 
@@ -781,6 +781,27 @@ mod test {
 
         let zero_offset_repeats: Vec<_> = timef.repeats(&zero_offsets).collect();
         assert_eq!(zero_offset_repeats, repeats);
+    }
+
+    #[test]
+    fn repeat_time_value_overflow() {
+        // i64::MAX / 86400 == 106751991167300
+        assert_eq!(
+            parse_timed_time("106751991167300d"),
+            Some(106751991167300 * 86400)
+        );
+        assert_eq!(parse_timed_time("106751991167301d"), None);
+        assert_eq!(parse_timed_time("-106751991167301d"), None);
+        assert_eq!(parse_timed_time("200000000000000d"), None);
+
+        assert!("200000000000000d 1h 0".parse::<RepeatTimes>().is_err());
+        assert!("1d 200000000000000d 0".parse::<RepeatTimes>().is_err());
+        assert!("1d 1h 200000000000000d".parse::<RepeatTimes>().is_err());
+        assert!(
+            "3000000000 200000000000000d"
+                .parse::<TimezoneAdjustments>()
+                .is_err()
+        );
     }
 
     #[test]
